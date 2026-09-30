@@ -1,0 +1,9 @@
+# NetMind placeholder files for future phases
+# These directories are intentionally empty in Phase 1
+# Contents are added in subsequent phases
+
+# ml/ - ML training code (Phase 2+)
+# pipelines/ - Ingestion and processing pipelines (Phase 2+)
+# agents/ - LangGraph agent definitions (Phase 6+)
+# rag/ - RAG engine (Phase 5+)
+# notebooks/ - Analysis notebooks (Phase 2+)

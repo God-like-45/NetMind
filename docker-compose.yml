@@ -1,0 +1,266 @@
+# ─── NetMind Local Development Stack ─────────────────────────────────────────
+#
+# Services included in Phase 1:
+#   - postgres:   Application database
+#   - redis:      Session store, rate limiting, approval queue
+#   - zookeeper:  Required by Kafka (Phase 1 scaffold, producers/consumers Phase 2)
+#   - kafka:      Event bus for telemetry, alarms, anomalies
+#   - backend:    FastAPI application
+#
+# Services commented out (enabled in later phases):
+#   - mlflow:     ML experiment tracking (Phase 2)
+#   - ollama:     Local LLM backend (Phase 6)
+#   - prometheus: Metrics collection (Phase 9)
+#   - grafana:    Metrics dashboards (Phase 9)
+#   - frontend:   Next.js application (Phase 8)
+#
+# Usage:
+#   cp .env.example .env      # Fill in passwords
+#   docker compose up -d      # Start all Phase 1 services
+#   docker compose logs -f    # Stream logs
+#
+# IMPORTANT: Copy .env.example to .env and set real passwords.
+# Never commit the .env file.
+
+version: "3.9"
+
+# ─── Shared network ──────────────────────────────────────────────────────────
+networks:
+  netmind:
+    driver: bridge
+    name: netmind-network
+
+# ─── Named volumes ───────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    name: netmind-postgres-data
+  redis_data:
+    name: netmind-redis-data
+  kafka_data:
+    name: netmind-kafka-data
+  zookeeper_data:
+    name: netmind-zookeeper-data
+  zookeeper_log:
+    name: netmind-zookeeper-log
+
+# ─── Services ────────────────────────────────────────────────────────────────
+services:
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: netmind-postgres
+    restart: unless-stopped
+    networks:
+      - netmind
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-netmind}
+      POSTGRES_USER: ${POSTGRES_USER:-netmind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-postgres.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    ports:
+      - "127.0.0.1:5432:5432"   # Bind to loopback only - not exposed externally
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-netmind} -d ${POSTGRES_DB:-netmind}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Redis ──────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: netmind-redis
+    restart: unless-stopped
+    networks:
+      - netmind
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1
+      --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6380:6379"   # Loopback only
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ─── Zookeeper (required by Kafka) ──────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    container_name: netmind-zookeeper
+    restart: unless-stopped
+    networks:
+      - netmind
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "cub zk-ready localhost:2181 10"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ─── Kafka ──────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: netmind-kafka
+    restart: unless-stopped
+    networks:
+      - netmind
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      KAFKA_LOG_RETENTION_HOURS: 24              # 24h retention for local dev
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "127.0.0.1:9093:9093"   # External access on loopback (for local tooling)
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─── Backend API ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: netmind-backend
+    restart: unless-stopped
+    networks:
+      - netmind
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Database
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-netmind}
+      POSTGRES_USER: ${POSTGRES_USER:-netmind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # Kafka
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 30
+
+      # Application
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:3000}
+
+      # Ollama (Phase 6 - connection will fail gracefully until that phase)
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+
+      # MLflow (Phase 2+)
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+
+      # Qdrant (Phase 6)
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    ports:
+      - "127.0.0.1:8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      # Mount source in dev for hot-reload
+      - ./backend:/app
+
+  # ─── MLflow (Phase 2+) ──────────────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    container_name: netmind-mlflow
+    restart: unless-stopped
+    networks:
+      - netmind
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlartifacts/mlflow.db
+      --default-artifact-root /mlartifacts
+    volumes:
+      - ./data/mlflow:/mlartifacts
+    ports:
+      - "127.0.0.1:5000:5000"
+
+  # ─── Ollama (Phase 6+) ──────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: netmind-ollama
+    restart: unless-stopped
+    networks:
+      - netmind
+    volumes:
+      - ./data/ollama:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  # ─── Qdrant (Phase 6) ───────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: netmind-qdrant
+    restart: unless-stopped
+    networks:
+      - netmind
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    ports:
+      - "127.0.0.1:6334:6333"
+
+  # ─── Prometheus (Phase 9+) ──────────────────────────────────────────────
+  # prometheus:
+  #   image: prom/prometheus:v2.54.0
+  #   ...
+
+  # ─── Grafana (Phase 9+) ─────────────────────────────────────────────────
+  # grafana:
+  #   image: grafana/grafana:11.2.0
+  #   ...

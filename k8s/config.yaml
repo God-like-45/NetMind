@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netmind
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netmind-config
+  namespace: netmind
+data:
+  ENVIRONMENT: "production"
+  POSTGRES_DB: "netmind"
+  POSTGRES_USER: "netmind_admin"
+  POSTGRES_HOST: "netmind-postgres.rds.amazonaws.com"
+  POSTGRES_PORT: "5432"
+  KAFKA_BOOTSTRAP_SERVERS: "netmind-kafka:9092"
+  REDIS_HOST: "netmind-redis"
+  REDIS_PORT: "6379"
+  QDRANT_HOST: "netmind-qdrant"
+  QDRANT_PORT: "6334"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: netmind-secrets
+  namespace: netmind
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "secret_db_password"
+  SECRET_KEY: "change_me_in_production_with_kms"
