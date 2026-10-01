@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class PostgresSettings(BaseSettings):
     """PostgreSQL connection settings."""
 
-    model_config = SettingsConfigDict(env_prefix="POSTGRES_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_prefix="POSTGRES_", extra="ignore")
 
     host: str = "localhost"
     port: int = 5432
@@ -46,7 +46,7 @@ class PostgresSettings(BaseSettings):
 class RedisSettings(BaseSettings):
     """Redis connection settings."""
 
-    model_config = SettingsConfigDict(env_prefix="REDIS_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_prefix="REDIS_", extra="ignore")
 
     host: str = "localhost"
     port: int = 6379
@@ -63,7 +63,7 @@ class RedisSettings(BaseSettings):
 class KafkaSettings(BaseSettings):
     """Kafka connection and topic settings."""
 
-    model_config = SettingsConfigDict(env_prefix="KAFKA_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_prefix="KAFKA_", extra="ignore")
 
     bootstrap_servers: str = "localhost:9092"
 
@@ -91,7 +91,7 @@ class KafkaSettings(BaseSettings):
 class JWTSettings(BaseSettings):
     """JWT authentication settings."""
 
-    model_config = SettingsConfigDict(env_prefix="JWT_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_prefix="JWT_", extra="ignore")
 
     secret_key: SecretStr = Field(default=..., description="JWT signing secret - required")
     algorithm: str = "HS256"
@@ -102,7 +102,7 @@ class JWTSettings(BaseSettings):
 class OllamaSettings(BaseSettings):
     """Ollama LLM backend settings."""
 
-    model_config = SettingsConfigDict(env_prefix="OLLAMA_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_prefix="OLLAMA_", extra="ignore")
 
     host: str = "http://localhost:11434"
     model: str = "llama3.2:3b"
@@ -112,7 +112,7 @@ class OllamaSettings(BaseSettings):
 class MLflowSettings(BaseSettings):
     """MLflow tracking settings."""
 
-    model_config = SettingsConfigDict(env_prefix="MLFLOW_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_prefix="MLFLOW_", extra="ignore")
 
     tracking_uri: str = "http://localhost:5000"
     experiment_name: str = "netmind-anomaly-detection"
@@ -127,7 +127,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

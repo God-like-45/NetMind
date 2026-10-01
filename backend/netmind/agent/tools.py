@@ -30,15 +30,16 @@ def search_incidents(query: str, current_user_roles: List[str]) -> List[Dict[str
     return [{"id": "INC-2025-04", "resolution": "Reverted firewall rule"}]
 
 def search_runbooks(query: str, current_user_roles: List[str]) -> List[Dict[str, Any]]:
-    # Call the RAG API locally
+    # Call the RAG API locally (host port 8001)
     try:
-        res = httpx.post("http://localhost:8000/api/v1/rag/query", json={
+        res = httpx.post("http://localhost:8001/api/v1/rag/query", json={
             "query": query,
             "user_roles": current_user_roles,
             "top_k": 2
-        }, timeout=5.0)
+        }, timeout=15.0)
         if res.status_code == 200:
-            return res.json().get("citations", [])
-        return []
-    except Exception:
-        return [{"source": "runbook_bgp.md", "content": "Clear BGP sessions"}]
+            data = res.json()
+            return [{"source": "rag_answer", "content": data.get("answer", "")}] + data.get("citations", [])
+        return [{"source": "error", "content": "Failed to retrieve runbook."}]
+    except Exception as e:
+        return [{"source": "error", "content": f"Exception calling RAG API: {e}"}]

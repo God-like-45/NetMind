@@ -153,7 +153,7 @@ def run():
         
         metrics = evaluate(y_test_anom, y_pred_iso, y_score_iso, "Isolation Forest")
         mlflow.log_metrics({f"anom_iso_{k}": v for k, v in metrics.items()})
-        # mlflow.sklearn.log_model(iso, "isolation_forest")
+        mlflow.sklearn.log_model(iso, "isolation_forest")
         
     print("\n--- FAILURE PREDICTION BASELINES ---")
     # Formulate prediction: Predict if failure will happen in next 12 hours (72 steps)
@@ -176,7 +176,7 @@ def run():
         
         metrics = evaluate(y_test_fail, y_pred_lr, y_prob_lr, "Logistic Regression")
         mlflow.log_metrics({f"fail_lr_{k}": v for k, v in metrics.items()})
-        # mlflow.sklearn.log_model(lr, "logistic_regression")
+        mlflow.sklearn.log_model(lr, "logistic_regression")
     
     # 2. Random Forest
     with mlflow.start_run(run_name="Random Forest"):
@@ -187,7 +187,7 @@ def run():
         
         metrics = evaluate(y_test_fail, y_pred_rf, y_prob_rf, "Random Forest")
         mlflow.log_metrics({f"fail_rf_{k}": v for k, v in metrics.items()})
-        # mlflow.sklearn.log_model(rf, "random_forest")
+        mlflow.sklearn.log_model(rf, "random_forest")
         
     # 3. XGBoost / HistGradientBoosting
     with mlflow.start_run(run_name="LightGBM_Equivalent"):
@@ -198,7 +198,7 @@ def run():
         
         metrics = evaluate(y_test_fail, y_pred_xgb, y_prob_xgb, "HistGradientBoosting")
         mlflow.log_metrics({f"fail_xgb_{k}": v for k, v in metrics.items()})
-        # mlflow.sklearn.log_model(xgb, "xgboost_baseline")
+        mlflow.sklearn.log_model(xgb, "xgboost_baseline")
         
         # Save a sample error analysis report
         fp_mask = (y_test_fail == 0) & (y_pred_xgb == 1)

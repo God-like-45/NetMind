@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "netmind.fullname" . }}-backend
+  labels:
+    app: {{ include "netmind.name" . }}
+    component: backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "netmind.name" . }}
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: {{ include "netmind.name" . }}
+        component: backend
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: POSTGRES_HOST
+              value: {{ .Values.backend.env.POSTGRES_HOST | quote }}
+            - name: POSTGRES_PORT
+              value: {{ .Values.backend.env.POSTGRES_PORT | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.backend.env.POSTGRES_DB | quote }}
+            - name: REDIS_HOST
+              value: {{ .Values.backend.env.REDIS_HOST | quote }}
+            - name: REDIS_PORT
+              value: {{ .Values.backend.env.REDIS_PORT | quote }}
+          # In production, inject credentials using secrets

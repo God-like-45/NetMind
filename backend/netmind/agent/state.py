@@ -10,13 +10,16 @@ class AgentStateEnum(str, Enum):
     VALIDATING = "VALIDATING"
     RECOMMENDING = "RECOMMENDING"
     WAITING_FOR_APPROVAL = "WAITING_FOR_APPROVAL"
+    ESCALATED = "ESCALATED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
-class WorkflowState(TypedDict):
+class WorkflowState(TypedDict, total=False):
     incident_id: str
     entity_id: str
     status: AgentStateEnum
+    iteration_count: int
+    validation_feedback: str
     plan: List[str]
     telemetry_data: Dict[str, Any]
     topology_data: Dict[str, Any]

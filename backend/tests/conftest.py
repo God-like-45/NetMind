@@ -12,6 +12,13 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+@pytest.fixture
+def client():
+    from netmind.app import create_app
+    app = create_app()
+    with TestClient(app) as c:
+        yield c
+
 # ─── Override environment before any imports that read settings ──────────────
 # These must be set before the application creates settings objects.
 os.environ.setdefault("POSTGRES_PASSWORD", "test_password")

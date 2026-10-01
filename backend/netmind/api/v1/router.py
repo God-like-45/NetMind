@@ -9,6 +9,7 @@ from netmind.api.v1.endpoints.incidents import router as incidents_router
 from netmind.api.v1.endpoints.topology import router as topology_router
 from netmind.api.v1.endpoints.rag import router as rag_router
 from netmind.api.v1.endpoints.agent import router as agent_router
+from netmind.api.v1.endpoints.models import router as models_router
 
 api_v1_router = APIRouter()
 
@@ -22,5 +23,9 @@ api_v1_router.include_router(incidents_router, prefix="/api/v1", tags=["incident
 api_v1_router.include_router(topology_router, prefix="/api/v1/topology", tags=["topology"])
 api_v1_router.include_router(rag_router, prefix="/api/v1/rag", tags=["rag"])
 api_v1_router.include_router(agent_router, prefix="/api/v1/agent", tags=["agent"])
+api_v1_router.include_router(models_router, prefix="/api/v1/models", tags=["models"])
+
+from netmind.api.v1.endpoints.auth import router as auth_router
+api_v1_router.include_router(auth_router, prefix="/api/v1")
 
 __all__ = ["api_v1_router"]

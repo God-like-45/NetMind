@@ -25,6 +25,30 @@ class ModelLoader:
         except Exception as e:
             logger.error(f"Failed to load model {model_name} from MLflow: {e}")
             raise
+            
+    def get_latest_run_model(self, experiment_name: str, run_name: str, artifact_path: str):
+        """
+        Finds the latest run by name in an experiment and loads its model.
+        Useful when Model Registry is not available.
+        """
+        try:
+            experiment = mlflow.get_experiment_by_name(experiment_name)
+            if not experiment:
+                raise ValueError(f"Experiment {experiment_name} not found")
+            
+            runs = mlflow.search_runs(
+                experiment_ids=[experiment.experiment_id], 
+                filter_string=f"tags.mlflow.runName = '{run_name}'",
+                order_by=["start_time DESC"], 
+                max_results=1
+            )
+            if runs.empty:
+                raise ValueError(f"No runs found for experiment {experiment_name} with name {run_name}")
+            run_id = runs.iloc[0]["run_id"]
+            return self.get_model_by_run_id(run_id, artifact_path)
+        except Exception as e:
+            logger.error(f"Failed to get latest run model: {e}")
+            raise
     
     def get_model_by_run_id(self, run_id: str, artifact_path: str):
         """

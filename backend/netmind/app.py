@@ -59,11 +59,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning(f"Kafka producer failed to connect on startup: {e}")
 
+    from netmind.core.redis_client import init_redis
+    try:
+        await init_redis()
+    except Exception as e:
+        logger.warning(f"Redis client failed to connect on startup: {e}")
+
     logger.info("NetMind API ready")
 
     yield  # ← Application runs here
 
     logger.info("NetMind API shutting down")
+    
+    from netmind.core.redis_client import close_redis
+    await close_redis()
+    
     await close_kafka_producer()
     await close_db()
     logger.info("NetMind API shutdown complete")
@@ -111,7 +121,6 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next: object) -> Response:
         """Add security headers to every response."""
-        # call_next is typed as Callable for mypy but works as awaitable
         import inspect
 
         if inspect.iscoroutinefunction(call_next):
@@ -129,33 +138,17 @@ def create_app() -> FastAPI:
             )
         return response
 
-    # ─── Request ID + Timing Middleware ──────────────────────────────────────
-    @app.middleware("http")
-    async def request_id_and_timing(request: Request, call_next: object) -> Response:
-        """Attach request ID and measure processing time."""
-        import inspect
+    # ─── Production Engineering Middleware (Request ID, Timing, Rate Limiting) 
+    from netmind.api.middleware import ProductionEngineeringMiddleware
+    from netmind.core.redis_client import get_redis_client
 
-        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
-        start = time.perf_counter()
+    redis_client = None
+    try:
+        redis_client = get_redis_client()
+    except RuntimeError:
+        logger.warning("Redis not available for middleware.")
 
-        if inspect.iscoroutinefunction(call_next):
-            response = await call_next(request)  # type: ignore[operator]
-        else:
-            response = call_next(request)  # type: ignore[operator]
-
-        duration_ms = (time.perf_counter() - start) * 1000
-        response.headers["X-Request-ID"] = request_id
-        response.headers["X-Process-Time-Ms"] = str(round(duration_ms, 2))
-
-        logger.info(
-            "Request completed",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=round(duration_ms, 2),
-            request_id=request_id,
-        )
-        return response
+    app.add_middleware(ProductionEngineeringMiddleware, redis_client=redis_client)
 
     # ─── Routers ─────────────────────────────────────────────────────────────
     app.include_router(api_v1_router)

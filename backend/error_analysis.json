@@ -1,0 +1,11 @@
+{
+  "false_positives": 3,
+  "false_negatives": 78,
+  "total_test_samples": 4330,
+  "difficult_devices": {
+    "dev_0": 40,
+    "dev_9": 38,
+    "dev_1": 2,
+    "dev_3": 1
+  }
+}
